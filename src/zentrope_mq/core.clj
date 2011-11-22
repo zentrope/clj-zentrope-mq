@@ -36,7 +36,7 @@
   (reset! started? false)
   (consumers/stop)
   (producers/stop)
-  (conn/stop))
+  (conn/close))
 
 ;; Is it wise to shutdown agents?
 ;;(shutdown-agents)
