@@ -51,6 +51,8 @@
 (defn- stop
   []
   (log/info "Stopping mq.main.")
+  (let [result (mq/unsubscribe :system-status)]
+    (log/info "unsubscribe" result))
   (mq/stop))
 
 (defn -main

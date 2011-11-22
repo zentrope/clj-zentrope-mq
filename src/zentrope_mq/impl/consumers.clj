@@ -10,7 +10,9 @@
   ;;
   (:require [clojure.tools.logging :as log]
             [zentrope-mq.impl.conn :as conn])
-  (:import [com.rabbitmq.client AlreadyClosedException QueueingConsumer]))
+  (:import [com.rabbitmq.client AlreadyClosedException
+                                ShutdownSignalException
+                                QueueingConsumer]))
 
 (def ^:private resurrection? (atom false))
 (def ^:private live-consumers (ref {}))
@@ -63,6 +65,18 @@
           (catch Throwable t
             (log/warn (:pid consumer) t))))
       (recur))
+    ;;
+    ;; An unsubscribe will close the channel, which will cause a shutdown
+    ;; exception. Let the consumer have a permanent death at this point unless
+    ;; the broker sent the signal.
+    ;;
+    (catch ShutdownSignalException t
+      (if (.isInitiatedByApplication t)
+        (log/info "consumer" (:pid consumer) "shutdown explicitly, not reviving")
+        (consumer-death consumer t)))
+    ;;
+    ;; For all other exceptions, schedule the consumer for ressurection.
+    ;;
     (catch Throwable t
       (consumer-death consumer t))))
 
@@ -74,7 +88,7 @@
       (doto (Thread. (fn [] (consume-fn c)))
         (.setName (str "consumer-"  (name (:pid c))))
         (.start))
-      (consumer-birth consumer))
+      (consumer-birth c))
     (catch Throwable t
       (consumer-death consumer t))))
 
@@ -104,6 +118,20 @@
 ;; Public
 ;; ----------------------------------------------------------------------------
 
+(defn unsubscribe
+  [client-key]
+  (try
+    (dosync
+     (when-let [c (client-key @live-consumers)]
+       (alter live-consumers dissoc client-key)
+       (alter dead-consumers dissoc client-key)
+       (when-let [channel (:channel c)]
+         (.close channel))))
+    (catch Throwable t
+      (log/error "unsubscribe-error" client-key t))
+    (finally
+     [client-key :unsubscribed])))
+
 (defn subscribe
   [client-key exchange route queue delegate]
   (start-consumer {:pid client-key
@@ -124,8 +152,6 @@
 (defn stop
   []
   (reset! resurrection? false)
-  (conn/close)
-  (dosync
-   (alter live-consumers {})
-   (alter dead-consumers {}))
+  (doseq [consumer (keys @live-consumers)]
+    (unsubscribe consumer))
   :stopped)

@@ -1,5 +1,6 @@
 (ns zentrope-mq.core
-  (:require [zentrope-mq.impl.consumers :as consumers]
+  (:require [zentrope-mq.impl.conn :as conn]
+            [zentrope-mq.impl.consumers :as consumers]
             [zentrope-mq.impl.producers :as producers]))
 
 (def ^:private started? (atom false))
@@ -13,6 +14,11 @@
   [pid exchange route qname delegate-fn]
   (check-started)
   (consumers/subscribe pid exchange route qname delegate-fn))
+
+(defn unsubscribe
+  [pid]
+  (check-started)
+  (consumers/unsubscribe pid))
 
 (defn publish
   [pid exchange route data]
@@ -29,7 +35,8 @@
   []
   (reset! started? false)
   (consumers/stop)
-  (producers/stop))
+  (producers/stop)
+  (conn/stop))
 
 ;; Is it wise to shutdown agents?
 ;;(shutdown-agents)

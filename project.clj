@@ -7,4 +7,5 @@
   :dev-dependencies [[org.slf4j/slf4j-api "1.6.4"]
                      [ch.qos.logback/logback-classic "1.0.0"]]
   :clean-non-project-classes true
+  :jar-exclusions [#"main.clj" #".DS_Store"]
   :extra-files-to-clean ["pom.xml" "lib"])
