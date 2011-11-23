@@ -4,24 +4,42 @@
   ;; producers should use this connection to construct channels
   ;; for their needs.
   ;;
-  (:require [clojure.tools.logging :as log])
+  (:require [clojure.tools.logging :as log]
+            [clojure.string :as string])
   (:import [com.rabbitmq.client ConnectionFactory]))
 
-;; TODO: Some way to supply connection properties.
+(def ^:private addr-props (or (System/getProperty "rabbit.servers")
+                              (System/getProperty "rabbitmq.servers")
+                              (System/getenv "RABBITMQ_SERVERS")
+                              "localhost:5672"))
 
-(def ^:private host "localhost")
-(def ^:private port 5672)
+(def ^:private addr-pairs (string/split addr-props #","))
+(def ^:private addresses (ref (cycle addr-pairs)))
+
+(defn- next-addr
+  []
+  (dosync
+   (let [[addr port] (string/split (first @addresses) #":")]
+     (alter addresses next)
+     [addr (Integer/parseInt port)])))
+
 (def ^:private conn (atom nil))
 
 (defn- mk-connection
   []
   (try
-    (.newConnection (doto (ConnectionFactory.)
-                      (.setHost host)
-                      (.setPort port)))
+    (let [[host port] (next-addr)]
+      (log/info "new-connection" {:host host :port port})
+      (.newConnection (doto (ConnectionFactory.)
+                        (.setHost host)
+                        (.setPort port))))
     (catch Throwable t
       (log/error "Unable to get connection" t)
       nil)))
+
+;; Public
+
+;; Should there be a way to set properties via an explicit function all?
 
 (defn close
   []
