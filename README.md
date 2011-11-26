@@ -195,7 +195,7 @@ power, this is probably the wrong library for you.
 You can also receive the same message in multiple places by using
 different queue names:
 
-```(clojure
+```clojure
 (subscribe :key-1 ex rte "stat.q.1" log-for-analytics)
 (subscribe :key-2 ex rte "stat.q.2" save-most-recent-for-gui)
 ```
@@ -241,7 +241,9 @@ Unix style enviroment variables.
 You can set up multiple RabbitMQ servers and `zentrope-mq` will
 attempt to failover from one to the other if it can.
 
+```shell
     -Drabbitmq.servers=10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672
+```
 
 (You can also use `rabbit.servers`.) Ports are required for now.
 
@@ -250,7 +252,9 @@ attempt to failover from one to the other if it can.
 You can also use a typical environment variable to configure
 `rabbitmq` connection parameters:
 
-    export RABBITMQ_SERVERS="10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672"
+```shell
+export RABBITMQ_SERVERS="10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672"
+```
 
 If you do both, JVM system properties take precedence over the
 environment variable.
