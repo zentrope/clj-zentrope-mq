@@ -8,7 +8,9 @@ Clojure.
 
 Declaring
 
-    [org.clojars.zentrope/zentrope.mq "1.0.0-SNAPSHOT"]
+```clojure
+[org.clojars.zentrope/zentrope.mq "1.0.0-SNAPSHOT"]
+```
 
 in leiningen gets you what you need. (NOTE: This app uses
 `clojure.tools.logging` for status information, so you might want to
