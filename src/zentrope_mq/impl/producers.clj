@@ -1,7 +1,9 @@
 (ns zentrope-mq.impl.producers
   (:import [com.rabbitmq.client MessageProperties AlreadyClosedException])
-  (:require [zentrope-mq.impl.conn :as conn]
-            [clojure.tools.logging :as log]))
+  (:require [zentrope-mq.impl
+             [conn :as conn]]
+            [clojure.tools
+             [logging :as log]]))
 
 (def ^:private publishers (atom {}))
 

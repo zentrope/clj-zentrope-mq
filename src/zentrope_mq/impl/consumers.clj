@@ -1,13 +1,13 @@
+;;
+;; ## Rabbit/MQ Consumers
+;;
+;; The idea here is to tell this namespace to start consumers
+;; delegating to your functions, then just let it go. The code
+;; here will make sure that consumers that die due to rabbitmq
+;; connection issues will be restarted after a slight pause,
+;; over and over again as needed.
+;;
 (ns zentrope-mq.impl.consumers
-  ;;
-  ;; Rabbit/MQ Consumers
-  ;;
-  ;; The idea here is to tell this namespace to start consumers
-  ;; delegating to your functions, then just let it go. The code
-  ;; here will make sure that consumers that die due to rabbitmq
-  ;; connection issues will be restarted after a slight pause,
-  ;; over and over again as needed.
-  ;;
   (:require [clojure.tools.logging :as log]
             [zentrope-mq.impl.conn :as conn])
   (:import [com.rabbitmq.client AlreadyClosedException

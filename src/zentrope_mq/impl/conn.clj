@@ -1,9 +1,10 @@
+;; ## CONN
+;;
+;; Manages a single connection to Rabbit/MQ. Consumers and
+;; producers should use this connection to construct channels
+;; for their needs.
+;;
 (ns zentrope-mq.impl.conn
-  ;;
-  ;; Manages a single connection to Rabbit/MQ. Consumers and
-  ;; producers should use this connection to construct channels
-  ;; for their needs.
-  ;;
   (:require [clojure.tools.logging :as log]
             [clojure.string :as string])
   (:import [com.rabbitmq.client ConnectionFactory]))

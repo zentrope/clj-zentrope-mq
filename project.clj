@@ -1,5 +1,6 @@
-(defproject zentrope-mq "1.0.0-SNAPSHOT"
-  :description "Covenience lib for fault-tolerant, non-blocking, casual Rabbit/MQ."
+(defproject org.clojars.zentrope/zentrope-mq "1.0.0-SNAPSHOT"
+  :description "Covenience lib for fault-tolerant, non-blocking,
+                transient, light-weight messaging via Rabbit/MQ."
   :run-aliases {:main zentrope-mq.main }
   :dependencies [[org.clojure/clojure "1.3.0"]
                  [org.clojure/tools.logging "0.2.3"]
