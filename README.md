@@ -22,9 +22,9 @@ for all pub/sub. All producers and consumers can be restored under
 stormy network conditions without operational intervention on the part
 of the application itself.
 
-My main use case is for apps wanting to send light-weight status or
-performance metrics to a generic topic for pickup by consumers
-interested in subject matter.
+My main use-case is for apps in a distributed environment wanting to
+send light-weight status or performance metrics to a generic topic for
+pickup by consumers interested in the subject matter.
 
 My main concern is fault-tolerant connections, _not_ durable,
 persistent, guaranteed messaging.
@@ -42,13 +42,14 @@ In other words:
   [msg]
   (log/info "message from" route (String. (.getBody msg))))
 
-(def send-status (partial mq/publish :sys.stat exchange route))
-
 (mq/start)
 
-(mq/subcribe :sys.stat exchange route "stat.q" log-msg)
+(mq/subscribe :sys.stat exchange route "stat.q" log-msg)
 
 (mq/publish :sys.stat exchange route (.getBytes "ok"))
+
+;; Make a partial to reduce boilerplate.
+(def send-status (partial mq/publish :sys.stat exchange route))
 
 (send-status (.getBytes "oops"))
 
@@ -141,8 +142,9 @@ Just import the `zentrope-mq.core` namespace into your project:
 To initialize the library, call the following before you subscribe or
 publish:
 
-    (mq/start)
-
+```clojure
+(mq/start)
+```
 A future version will remove this necessity.
 
 ### Stop
@@ -150,7 +152,9 @@ A future version will remove this necessity.
 It's a good idea to call `stop` when your app is going to exit to make
 sure that any support threads get the chance to clean up resources.
 
-    (mq/stop)
+```clojure
+(mq/stop)
+```
 
 A future version will remove the need for this.
 
@@ -237,16 +241,16 @@ Unix style enviroment variables.
 You can set up multiple RabbitMQ servers and `zentrope-mq` will
 attempt to failover from one to the other if it can.
 
-    -Drabbit.servers=10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672
+    -Drabbitmq.servers=10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672
 
-Ports are required for now.
+(You can also use `rabbit.servers`.) Ports are required for now.
 
 **Unix Environment**
 
 You can also use a typical environment variable to configure
 `rabbitmq` connection parameters:
 
-    export RABBIT_SERVERS="10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672"
+    export RABBITMQ_SERVERS="10.254.7.86:5672,10.254.7.103:5672,mq.example.com:5672"
 
 If you do both, JVM system properties take precedence over the
 environment variable.
@@ -270,6 +274,9 @@ A list of plans:
     than a `byte-array`.
   * Figure out how to include logging without requiring users to
     import implementations.
+  * What's the right amount of logging? I spose users can just silence
+    stuff using logger configs.
+  * Add proper licensing to each file and the readme.
 
 ## License
 
