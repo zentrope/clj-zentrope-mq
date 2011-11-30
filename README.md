@@ -9,7 +9,7 @@ Clojure.
 Declaring
 
 ```clojure
-[org.clojars.zentrope/zentrope.mq "1.0.0-SNAPSHOT"]
+[org.clojars.zentrope/zentrope.mq "0.1.0"]
 ```
 
 in leiningen gets you what you need. (NOTE: This app uses
