@@ -1,21 +1,19 @@
 (ns zentrope-mq.impl.producers
   (:import [com.rabbitmq.client MessageProperties AlreadyClosedException])
-  (:require [zentrope-mq.impl
-             [conn :as conn]]
-            [clojure.tools
-             [logging :as log]]))
+  (:require [zentrope-mq.impl.conn :as conn]
+            [clojure.tools.logging :as log :only [debug]]))
 
-(def ^:private publishers (atom {}))
+(def ^:private publishers (atom {})) ;; :key keyword :value agent
 
 (defn- publish-error
   "When a message send applied by an agent fails, remove the agent
-from the global publishers list. It'll be recreated on the next attempt
-to send a message."
+   from the global publishers list. It'll be recreated on the next attempt
+   to send a message."
   [agent exception]
-  (log/error "agent-error" agent "exception" exception)
-  (swap! publishers dissoc (:pid agent))
+  (log/debug "agent" (:pid agent) "exception" (.getMessage exception))
+  (swap! publishers (fn [m] dissoc m (:pid agent)))
   (when (instance? AlreadyClosedException exception)
-    (log/warn "producers" "attempting to reset a closed connection")
+    (log/debug "producers" "attempting to reset a closed connection")
     (conn/reset)))
 
 (defn- assoc-channel
@@ -28,24 +26,24 @@ to send a message."
 
 (defn- mk-and-register-agent
   "Return an agent suitable for handling message sends and
-register it with the global list of publishers."
+   register it with the global list of publishers."
   [producer]
   (let [p (assoc-channel producer)
-        a (agent p :handler-fn publish-error)]
+        a (agent p :error-handler publish-error)]
     (swap! publishers assoc (:pid p) a)
     a))
 
 (defn- find-agent
   "Return an agent matching the producer spec, or create one if
-it doesn't already exist."
+   it doesn't already exist."
   [producer]
-  (if-let [producer-agent ((:pid producer) publishers)]
+  (if-let [producer-agent ((:pid producer) @publishers)]
     producer-agent
     (mk-and-register-agent producer)))
 
 (defn- basic-publish
   "Send a message to a publisher's channel (called from within a function
-applied by an agent) and returns the publisher."
+   applied by an agent) and returns the publisher."
   [publisher data]
   (.basicPublish (:channel publisher)
                  (:exchange publisher)
@@ -56,9 +54,12 @@ applied by an agent) and returns the publisher."
 
 (defn- send-to
   "Send data to the aysnchronous agent representing the channel
-for the exchange/route implied by the publisher."
+   for the exchange/route implied by the publisher."
   [producer data]
-  (send-off (find-agent producer) (fn [p] (basic-publish p data))))
+  (try
+    (send-off (find-agent producer) (fn [p] (basic-publish p data)))
+    (catch Throwable t
+      (log/debug "send-to" (.getMessage t)))))
 
 ;; ----------------------------------------------------------------------------
 
@@ -72,9 +73,11 @@ for the exchange/route implied by the publisher."
   []
   :started)
 
-(defn stop ;; clear?
+;; Should instead register a shutdown hook.
+(defn stop
   []
+  (doseq [[pid agent] @publishers]
+    (log/debug "closing" pid)
+    (send-off agent (fn [p] (.close (:channel p)) p)))
   (reset! publishers {})
-  ;; iterate through any existing producers and call close on
-  ;; the channel?
   :stopped)

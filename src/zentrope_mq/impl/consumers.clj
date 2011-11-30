@@ -1,14 +1,14 @@
-;;
-;; ## Rabbit/MQ Consumers
-;;
-;; The idea here is to tell this namespace to start consumers
-;; delegating to your functions, then just let it go. The code
-;; here will make sure that consumers that die due to rabbitmq
-;; connection issues will be restarted after a slight pause,
-;; over and over again as needed.
-;;
 (ns zentrope-mq.impl.consumers
-  (:require [clojure.tools.logging :as log]
+  ;;
+  ;; ## Rabbit/MQ Consumers
+  ;;
+  ;; The idea here is to tell this namespace to start consumers
+  ;; delegating to your functions, then just let it go. The code
+  ;; here will make sure that consumers that die due to rabbitmq
+  ;; connection issues will be restarted after a slight pause,
+  ;; over and over again as needed.
+  ;;
+  (:require [clojure.tools.logging :as log :only [debug]]
             [zentrope-mq.impl.conn :as conn])
   (:import [com.rabbitmq.client AlreadyClosedException
                                 ShutdownSignalException
@@ -18,18 +18,30 @@
 (def ^:private live-consumers (ref {}))
 (def ^:private dead-consumers (ref {}))
 
+;; Various java-interop flags for constructing a consumer.
+(def ^:private durable? false)
+(def ^:private auto-delete? true)
+(def ^:private exclusive-queue? false)
+(def ^:private auto-ack? true)
+(def ^:private exchange-type "topic")
+
 (defn- mk-channel
   [consumer]
   (doto (.createChannel (conn/connection))
-    (.exchangeDeclare (:exchange consumer) "topic" false true nil)
-    (.queueDeclare (:queue consumer) false false true nil)
+    (.exchangeDeclare (:exchange consumer) exchange-type durable? auto-delete? nil)
+    (.queueDeclare (:queue consumer) durable? exclusive-queue? auto-delete? nil)
     (.queueBind (:queue consumer) (:exchange consumer) (:route consumer))))
 
 (defn- mk-delivery
   [consumer]
+  ;;
+  ;; According the the new docs for 2.7.0, QueueingConsumer is
+  ;; deprecated. Instead, we should extend DefaultConsumer or
+  ;; implement Consumer directly.
+  ;;
   (let [delivery (QueueingConsumer. (:channel consumer))]
     (doto (:channel consumer)
-      (.basicConsume (:queue consumer) true delivery))
+      (.basicConsume (:queue consumer) auto-ack? delivery))
     (assoc consumer :delivery delivery)))
 
 (defn- mk-consumer
@@ -39,21 +51,24 @@
 
 (defn- consumer-birth
   [consumer]
-  (log/info "birth" (:pid consumer) (:route consumer) (:queue consumer))
+  (log/debug "birth" (:pid consumer) (:route consumer) (:queue consumer))
   (dosync
    (alter dead-consumers dissoc (:pid consumer))
    (alter live-consumers assoc (:pid consumer) consumer)))
 
 (defn- consumer-death
   [consumer reason]
-  (log/info "death" consumer reason)
+  (log/debug "death" (:pid consumer) reason)
   (when (instance? AlreadyClosedException reason)
-    (log/warn "death" "attempting to reset mq connection")
+    (log/debug "death:" "now attempting to reset mq connection")
     (conn/reset))
-  (dosync
-   (alter live-consumers dissoc (:pid consumer))
-   (when @resurrection?
-     (alter dead-consumers assoc (:pid consumer) consumer))))
+  (let [c (-> consumer
+              (dissoc :channel)
+              (dissoc :delivery))]
+    (dosync
+     (alter live-consumers dissoc (:pid c))
+     (when @resurrection?
+       (alter dead-consumers assoc (:pid c) c)))))
 
 (defn- consume-fn
   [consumer]
@@ -63,7 +78,7 @@
         (try
           ((:delegate consumer) d)
           (catch Throwable t
-            (log/warn (:pid consumer) t))))
+            (log/debug (:pid consumer) (.getMessage t)))))
       (recur))
     ;;
     ;; An unsubscribe will close the channel, which will cause a shutdown
@@ -72,7 +87,7 @@
     ;;
     (catch ShutdownSignalException t
       (if (.isInitiatedByApplication t)
-        (log/info "consumer" (:pid consumer) "shutdown explicitly, not reviving")
+        (log/debug "consumer" (:pid consumer) "shutdown explicitly, not reviving")
         (consumer-death consumer t)))
     ;;
     ;; For all other exceptions, schedule the consumer for ressurection.
@@ -82,11 +97,11 @@
 
 (defn- start-consumer
   [consumer]
-  (log/info "starting" consumer)
+  (log/debug "starting consumer" (:pid consumer))
   (try
     (let [c (mk-consumer consumer)]
       (doto (Thread. (fn [] (consume-fn c)))
-        (.setName (str "consumer-"  (name (:pid c))))
+        (.setName (str "ztmq.consumer."  (name (:pid c))))
         (.start))
       (consumer-birth c))
     (catch Throwable t
@@ -103,7 +118,7 @@
       (doseq [[pid consumer] @dead-consumers]
         (start-consumer consumer))
       (catch Throwable t
-        (log/error "ressurect" t)))
+        (log/debug "ressurect" (.getMessage t))))
     (Thread/sleep 2000)
     (when @resurrection?
       (recur))))
@@ -111,7 +126,7 @@
 (defn- start-resurrection-thread
   []
   (doto (Thread. ressurect)
-    (.setName "mq.consumer.ressurection")
+    (.setName "ztmq.consumer.ressurection")
     (.start)))
 
 ;; ----------------------------------------------------------------------------
@@ -128,7 +143,7 @@
        (when-let [channel (:channel c)]
          (.close channel))))
     (catch Throwable t
-      (log/error "unsubscribe-error" client-key t))
+      (log/debug "unsubscribe-error" client-key (.getMessage t)))
     (finally
      [client-key :unsubscribed])))
 

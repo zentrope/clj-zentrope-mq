@@ -16,6 +16,8 @@
   (.addShutdownHook (Runtime/getRuntime)
                     (mk-thread thread-name runnable)))
 
+(def send-sys-stat (partial mq/publish :test-mq "default" "system.status"))
+
 (def test-msg (.getBytes "{\"app\" : \"mq-lib\",\"hostaddr\" : \"127.0.0.1\"}"))
 
 (defn- do-pub
@@ -24,7 +26,7 @@
     (try
       (do
         (log/info "sending test.mq status")
-        (mq/publish :test-mq "default" "system.status" test-msg))
+        (send-sys-stat test-msg))
       (catch Throwable t
         (log/error t))
       (finally (Thread/sleep 5000)))
@@ -38,7 +40,11 @@
 
 (defn test-delegate
   [msg]
-  (log/info "delegate" (String. (.getBody msg))))
+  (try
+    (log/info "delegate" (String. (.getBody msg)))
+    (catch Throwable t
+      (log/error "delegate" t))))
+
 
 (defn- start
   []

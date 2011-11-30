@@ -1,10 +1,9 @@
-;; ## CONN
-;;
-;; Manages a single connection to Rabbit/MQ. Consumers and
-;; producers should use this connection to construct channels
-;; for their needs.
-;;
 (ns zentrope-mq.impl.conn
+  ;;
+  ;; Manages a single connection to Rabbit/MQ. Consumers and
+  ;; producers should use this connection to construct channels
+  ;; for their needs.
+  ;;
   (:require [clojure.tools.logging :as log]
             [clojure.string :as string])
   (:import [com.rabbitmq.client ConnectionFactory]))
@@ -30,12 +29,12 @@
   []
   (try
     (let [[host port] (next-addr)]
-      (log/info "new-connection" {:host host :port port})
+      (log/info "acquire-new-connection" {:host host :port port})
       (.newConnection (doto (ConnectionFactory.)
                         (.setHost host)
                         (.setPort port))))
     (catch Throwable t
-      (log/error "Unable to get connection" t)
+      (log/error "new-connection-failed" (.getMessage t))
       nil)))
 
 ;; Public
@@ -50,15 +49,15 @@
                   (try
                     (.close c)
                   (catch Throwable t
-                    (log/error "closing conn" t))
+                    (log/error "closing conn" (.getMessage t)))
                   (finally nil)))))))
 
 (defn reset
   []
   (locking conn
     (swap! conn (fn [c]
-                  (when-not (.isOpen c)
-                    (close)
+                  (when (.isOpen c)
+                    (.close c)
                     (mk-connection))))))
 
 (defn connection
