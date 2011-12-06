@@ -1,4 +1,4 @@
-(defproject org.clojars.zentrope/zentrope-mq "0.1.0"
+(defproject org.clojars.zentrope/zentrope-mq "0.1.1"
   :description "Convenience lib for fault-tolerant, non-blocking,
                 transient, light-weight messaging via Rabbit/MQ."
   :run-aliases {:main zentrope-mq.main }

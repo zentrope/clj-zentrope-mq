@@ -1,4 +1,4 @@
-<!-- -*- mode: markdown; global-hl-line-mode: nil; -*- -->
+<!-- -*- mode: markdown; mode: auto-fill;  -*- -->
 
 # Zentrope (Rabbit) MQ
 
@@ -9,7 +9,7 @@ Clojure.
 Declaring
 
 ```clojure
-[org.clojars.zentrope/zentrope.mq "0.1.0"]
+[org.clojars.zentrope/zentrope.mq "0.1.1"]
 ```
 
 in leiningen gets you what you need. (NOTE: This app uses
@@ -284,6 +284,11 @@ A list of plans:
   * What's the right amount of logging? I spose users can just silence
     stuff using logger configs.
   * Add proper licensing to each file and the readme.
+
+## Version History
+
+* [0.1.0] Initial version.
+* [0.1.1] Fix for auto-deleting exchange bouncing all connections.
 
 ## License
 
