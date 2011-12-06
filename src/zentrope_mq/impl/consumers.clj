@@ -20,7 +20,8 @@
 
 ;; Various java-interop flags for constructing a consumer.
 (def ^:private durable? false)
-(def ^:private auto-delete? true)
+(def ^:private auto-delete-exchange? false)
+(def ^:private auto-delete-queue? true)
 (def ^:private exclusive-queue? false)
 (def ^:private auto-ack? true)
 (def ^:private exchange-type "topic")
@@ -28,8 +29,8 @@
 (defn- mk-channel
   [consumer]
   (doto (.createChannel (conn/connection))
-    (.exchangeDeclare (:exchange consumer) exchange-type durable? auto-delete? nil)
-    (.queueDeclare (:queue consumer) durable? exclusive-queue? auto-delete? nil)
+    (.exchangeDeclare (:exchange consumer) exchange-type durable? auto-delete-exchange? nil)
+    (.queueDeclare (:queue consumer) durable? exclusive-queue? auto-delete-queue? nil)
     (.queueBind (:queue consumer) (:exchange consumer) (:route consumer))))
 
 (defn- mk-delivery
@@ -67,7 +68,14 @@
               (dissoc :delivery))]
     (dosync
      (alter live-consumers dissoc (:pid c))
-     (when @resurrection?
+     ;;
+     ;; If the consumer wasn't intentionally cancelled, and we're still
+     ;; ressurrecting dead consumers, then add the consumer to the
+     ;; dead queue.
+     ;;
+     (when (and (not (and (instance? ShutdownSignalException reason)
+                          (.isInitiatedByApplication reason)))
+                @resurrection?)
        (alter dead-consumers assoc (:pid c) c)))))
 
 (defn- consume-fn
@@ -86,9 +94,9 @@
     ;; the broker sent the signal.
     ;;
     (catch ShutdownSignalException t
-      (if (.isInitiatedByApplication t)
-        (log/debug "consumer" (:pid consumer) "shutdown explicitly, not reviving")
-        (consumer-death consumer t)))
+      (when (.isInitiatedByApplication t)
+        (log/debug "consumer" (:pid consumer) "shutdown explicitly, not reviving"))
+      (consumer-death consumer t))
     ;;
     ;; For all other exceptions, schedule the consumer for ressurection.
     ;;
@@ -141,7 +149,9 @@
        (alter live-consumers dissoc client-key)
        (alter dead-consumers dissoc client-key)
        (when-let [channel (:channel c)]
-         (.close channel))))
+         (log/debug "channel.open?" (.isOpen channel))
+         (when (.isOpen channel)
+           (.close channel)))))
     (catch Throwable t
       (log/debug "unsubscribe-error" client-key (.getMessage t)))
     (finally

@@ -3,7 +3,14 @@
   (:require [zentrope-mq.impl.conn :as conn]
             [clojure.tools.logging :as log :only [debug]]))
 
+
 (def ^:private publishers (atom {})) ;; :key keyword :value agent
+
+;; Various java-interop flags for constructing a consumer.
+(def ^:private durable? false)
+(def ^:private auto-delete-exchange? false)
+(def ^:private auto-ack? true)
+(def ^:private exchange-type "topic")
 
 (defn- publish-error
   "When a message send applied by an agent fails, remove the agent
@@ -22,7 +29,10 @@
   (assoc producer :channel
          (doto (.createChannel (conn/connection))
            (.exchangeDeclare (:exchange producer)
-                             "topic" false true nil))))
+                             exchange-type
+                             durable?
+                             auto-delete-exchange?
+                             nil))))
 
 (defn- mk-and-register-agent
   "Return an agent suitable for handling message sends and
