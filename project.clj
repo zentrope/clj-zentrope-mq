@@ -1,12 +1,16 @@
 (defproject org.clojars.zentrope/zentrope-mq "0.1.1"
-  :description "Convenience lib for fault-tolerant, non-blocking,
-                transient, light-weight messaging via Rabbit/MQ."
-  :run-aliases {:main zentrope-mq.main }
-  :dependencies [[org.clojure/clojure "1.3.0"]
-                 [org.clojure/tools.logging "0.2.3"]
-                 [com.rabbitmq/amqp-client "2.7.0"]]
-  :dev-dependencies [[org.slf4j/slf4j-api "1.6.4"]
-                     [ch.qos.logback/logback-classic "1.0.0"]]
-  :clean-non-project-classes true
+  :description "Light-weight, fault-tolerant messaging via Rabbit/MQ."
+  :url "https://github.com/zentrope/clj-zentrope-mq"
+  :license {:name "Eclipse Public License" :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/tools.logging "0.2.6"]
+                 [com.rabbitmq/amqp-client "3.2.2"]]
+
+  :profiles {:uberjar {:aot :all}
+             :dev {:dependencies [[org.slf4j/slf4j-api "1.7.5"]
+                                  [ch.qos.logback/logback-classic "1.0.13"]]}}
   :jar-exclusions [#"main.clj" #".DS_Store"]
-  :extra-files-to-clean ["pom.xml" "lib"])
+  :main ^:skip-aot zentrope-mq.main
+  :jvm-opts ["-Dapple.awt.UIElement=true"]
+  :min-lein-version "2.3.4"
+  :target-path "target/%s")
