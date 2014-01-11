@@ -63,7 +63,7 @@
   publisher)
 
 (defn- send-to
-  "Send data to the aysnchronous agent representing the channel
+  "Send data to the asynchronous agent representing the channel
    for the exchange/route implied by the publisher."
   [producer data]
   (try

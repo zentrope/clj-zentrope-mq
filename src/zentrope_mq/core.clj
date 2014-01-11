@@ -1,11 +1,13 @@
 (ns zentrope-mq.core
-  (:require [zentrope-mq.impl
-             [conn :as conn]
-             [consumers :as consumers]
-             [producers :as producers]]))
+  (:require
+    [zentrope-mq.impl.conn2 :as conn2]
+    [zentrope-mq.impl.producers2 :as prod2]
+    [zentrope-mq.impl
+     [conn :as conn]
+     [consumers :as consumers]
+     [producers :as producers]]))
 
 (def ^:private started? (atom false))
-
 
 (defn- check-started
   ;; NOTE: Should this be used to automatically start monitor
