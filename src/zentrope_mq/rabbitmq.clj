@@ -48,7 +48,7 @@
 ;;-----------------------------------------------------------------------------
 ;; New stuff
 
-(defn make
+(defn make-broker
   []
   (let [conn (amqp/make "localhost" "5672")]
     (amqp/start! conn)

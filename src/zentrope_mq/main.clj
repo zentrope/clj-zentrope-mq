@@ -25,7 +25,7 @@
       (pr-str)))
 
 (defn- publish-loop!
-  [rabbit control]
+  [broker control]
   (thread
     (loop []
       (let [[val port] (alts!! [control (timeout 5000)])]
@@ -33,7 +33,7 @@
           (try
             (let [body (test-msg)]
               (log/info "publish" body)
-              (rabbitmq/pub! rabbit :test-mq "default" "system.status" (.getBytes body)))
+              (rabbitmq/pub! broker :test-mq "default" "system.status" (.getBytes body)))
             (catch Throwable t
               (log/error "problem with publication" t)))
           (recur))))))
@@ -57,17 +57,12 @@
 ;;-----------------------------------------------------------------------------
 ;; Standalone app
 
-(defn- make
-  [rabbit]
-  (atom {:control-ch (chan)
-         :mq rabbit}))
-
 (defn- start
   [this]
   (log/info "Starting mq.main.")
   (rabbitmq/start)
-  (rabbitmq/start! (:mq @this))
-  (publish-loop! (:mq @this) (:control-ch @this))
+  (rabbitmq/start! (:broker @this))
+  (publish-loop! (:broker @this) (:control-ch @this))
   (start-consumer)
   :started)
 
@@ -78,7 +73,8 @@
     (close! c)
     (swap! this assoc :control-ch (chan)))
   (stop-consumer)
-  (rabbitmq/stop))
+  (rabbitmq/stop)
+  (rabbitmq/stop! (:broker @this)))
 
 ;;-----------------------------------------------------------------------------
 
@@ -86,8 +82,8 @@
   [& args]
   (log/info "hello mq test app")
   (let [lock (promise)
-        rabbit (rabbitmq/make)
-        app (make rabbit)]
+        broker (rabbitmq/make-broker)
+        app (atom {:control-ch (chan) :broker broker})]
     (shutdown-hook (fn [] (stop app)))
     (shutdown-hook (fn [] (deliver lock :done)))
     (start app)
