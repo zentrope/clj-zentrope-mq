@@ -4,6 +4,7 @@
   ;; out ideas or bugs while running in a repl.
   ;;
   (:require
+;;    [clojure.stacktrace :refer [print-stack-trace]]
     [clojure.tools.logging :as log]
     [clojure.core.async :refer [thread alts!! chan timeout close!]]
     [zentrope-mq.core :as mq]))
@@ -18,22 +19,23 @@
 ;;-----------------------------------------------------------------------------
 ;; Publish stuff
 
-(def ^:private exchange "default")
-(def ^:private send-it (partial mq/publish :test-mq exchange "system.status"))
-
 (defn- test-msg
   []
   (-> {:app "mq-lib" :hostaddr "127.0.0.1" :ts (System/currentTimeMillis)}
-      (pr-str)
-      (.getBytes)))
+      (pr-str)))
 
 (defn- publish-loop!
-  [control]
+  [rabbit control]
   (thread
     (loop []
       (let [[val port] (alts!! [control (timeout 5000)])]
         (when-not (= port control)
-          (send-it (test-msg))
+          (try
+            (let [body (test-msg)]
+              (log/info "publish" body)
+              (mq/pub! rabbit :test-mq "default" "system.status" (.getBytes body)))
+            (catch Throwable t
+              (log/error "problem with publication" t)))
           (recur))))))
 
 ;;-----------------------------------------------------------------------------
@@ -45,7 +47,7 @@
 
 (defn- start-consumer
   []
-  (mq/subscribe :system-status exchange "system.status" "test.queue" consume)
+  (mq/subscribe :system-status "default" "system.status" "test.queue" consume)
   :started)
 
 (defn- stop-consumer
@@ -56,14 +58,16 @@
 ;; Standalone app
 
 (defn- make
-  []
-  (atom {:control-ch (chan)}))
+  [rabbit]
+  (atom {:control-ch (chan)
+         :mq rabbit}))
 
 (defn- start
   [this]
   (log/info "Starting mq.main.")
   (mq/start)
-  (publish-loop! (:control-ch @this))
+  (mq/start! (:mq @this))
+  (publish-loop! (:mq @this) (:control-ch @this))
   (start-consumer)
   :started)
 
@@ -82,7 +86,8 @@
   [& args]
   (log/info "hello mq test app")
   (let [lock (promise)
-        app (make)]
+        rabbit (mq/make)
+        app (make rabbit)]
     (shutdown-hook (fn [] (stop app)))
     (shutdown-hook (fn [] (deliver lock :done)))
     (start app)

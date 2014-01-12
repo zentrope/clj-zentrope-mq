@@ -1,11 +1,12 @@
 (ns zentrope-mq.core
   (:require
+    [clojure.tools.logging :as log]
+    ;; new
     [zentrope-mq.impl.conn2 :as conn2]
-    [zentrope-mq.impl.producers2 :as prod2]
-    [zentrope-mq.impl
-     [conn :as conn]
-     [consumers :as consumers]
-     [producers :as producers]]))
+    [zentrope-mq.impl.producers :as producers]
+    ;; old
+    [zentrope-mq.impl.conn :as conn]
+    [zentrope-mq.impl.consumers :as consumers]))
 
 (def ^:private started? (atom false))
 
@@ -33,23 +34,35 @@
   (check-started)
   (consumers/unsubscribe pid))
 
-(defn publish
-  [pid exchange route data]
-  (check-started)
-  (producers/publish pid exchange route data))
-
 (defn start
   []
   (consumers/start)
-  (producers/start)
   (reset! started? true))
 
 (defn stop
   []
   (reset! started? false)
   (consumers/stop)
-  (producers/stop)
   (conn/close))
 
-;; Is it wise to shutdown agents?
-;;(shutdown-agents)
+;;-----------------------------------------------------------------------------
+;; New stuff
+
+(defn make
+  []
+  (let [conn (conn2/make "localhost" "5672")]
+    (conn2/start! conn)
+    (atom {:conn conn :prod (producers/make conn)})))
+
+(defn pub!
+  [this pid exchange route data]
+  (producers/publish! (:prod @this) pid exchange route data))
+
+(defn start!
+  [this]
+  (producers/start! (:prod @this)))
+
+(defn stop!
+  [this]
+  (producers/stop! (:prod @this))
+  (conn2/stop! (:conn @this)))
