@@ -1,6 +1,6 @@
 (ns zentrope-mq.impl.producers
   (:require
-    [zentrope-mq.impl.conn2 :as conn]
+    [zentrope-mq.impl.amqp :as amqp]
     [clojure.tools.logging :as log]
     [clojure.core.async :refer [go go-loop <! <!! put! chan close! filter<]]))
 
@@ -10,13 +10,13 @@
   [this pid exchange route]
   (let [{:keys [conn msg-q]} @this
         input-q (filter< #(= (first %) pid) msg-q)
-        amq-channel (conn/make-channel! conn exchange)]
+        amq-channel (amqp/make-channel! conn exchange)]
     (go-loop []
       (when-let [[_ msg] (<! input-q)]
-        (if-let [worked (conn/basic-publish! conn amq-channel exchange route msg)]
+        (if-let [worked (amqp/basic-publish! conn amq-channel exchange route msg)]
           (recur)
           :done))
-      (conn/close-channel! conn amq-channel)
+      (amqp/close-channel! conn amq-channel)
       :done)))
 
 (defn- bootstrap!
@@ -32,11 +32,11 @@
 (defn publish!
   [this pid exchange route data]
   (let [{:keys [conn msg-q producers]} @this]
-    (when-not (conn/open? conn)
-      (conn/restart! conn))
+    (when-not (amqp/open? conn)
+      (amqp/restart! conn))
     (when-not (contains? producers pid)
       (bootstrap! this pid exchange route))
-    (when (conn/open? conn)
+    (when (amqp/open? conn)
       (put! msg-q [pid data]))))
 
 (defn make

@@ -1,8 +1,8 @@
-(ns zentrope-mq.core
+(ns zentrope-mq.rabbitmq
   (:require
     [clojure.tools.logging :as log]
     ;; new
-    [zentrope-mq.impl.conn2 :as conn2]
+    [zentrope-mq.impl.amqp :as amqp]
     [zentrope-mq.impl.producers :as producers]
     ;; old
     [zentrope-mq.impl.conn :as conn]
@@ -50,8 +50,8 @@
 
 (defn make
   []
-  (let [conn (conn2/make "localhost" "5672")]
-    (conn2/start! conn)
+  (let [conn (amqp/make "localhost" "5672")]
+    (amqp/start! conn)
     (atom {:conn conn :prod (producers/make conn)})))
 
 (defn pub!
@@ -65,4 +65,4 @@
 (defn stop!
   [this]
   (producers/stop! (:prod @this))
-  (conn2/stop! (:conn @this)))
+  (amqp/stop! (:conn @this)))

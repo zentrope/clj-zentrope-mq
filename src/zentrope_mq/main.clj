@@ -7,7 +7,7 @@
 ;;    [clojure.stacktrace :refer [print-stack-trace]]
     [clojure.tools.logging :as log]
     [clojure.core.async :refer [thread alts!! chan timeout close!]]
-    [zentrope-mq.core :as mq]))
+    [zentrope-mq.rabbitmq :as rabbitmq]))
 
 ;;-----------------------------------------------------------------------------
 ;; App Daemon functions
@@ -33,7 +33,7 @@
           (try
             (let [body (test-msg)]
               (log/info "publish" body)
-              (mq/pub! rabbit :test-mq "default" "system.status" (.getBytes body)))
+              (rabbitmq/pub! rabbit :test-mq "default" "system.status" (.getBytes body)))
             (catch Throwable t
               (log/error "problem with publication" t)))
           (recur))))))
@@ -47,12 +47,12 @@
 
 (defn- start-consumer
   []
-  (mq/subscribe :system-status "default" "system.status" "test.queue" consume)
+  (rabbitmq/subscribe :system-status "default" "system.status" "test.queue" consume)
   :started)
 
 (defn- stop-consumer
   []
-  (mq/unsubscribe :system-status))
+  (rabbitmq/unsubscribe :system-status))
 
 ;;-----------------------------------------------------------------------------
 ;; Standalone app
@@ -65,8 +65,8 @@
 (defn- start
   [this]
   (log/info "Starting mq.main.")
-  (mq/start)
-  (mq/start! (:mq @this))
+  (rabbitmq/start)
+  (rabbitmq/start! (:mq @this))
   (publish-loop! (:mq @this) (:control-ch @this))
   (start-consumer)
   :started)
@@ -78,7 +78,7 @@
     (close! c)
     (swap! this assoc :control-ch (chan)))
   (stop-consumer)
-  (mq/stop))
+  (rabbitmq/stop))
 
 ;;-----------------------------------------------------------------------------
 
@@ -86,7 +86,7 @@
   [& args]
   (log/info "hello mq test app")
   (let [lock (promise)
-        rabbit (mq/make)
+        rabbit (rabbitmq/make)
         app (make rabbit)]
     (shutdown-hook (fn [] (stop app)))
     (shutdown-hook (fn [] (deliver lock :done)))

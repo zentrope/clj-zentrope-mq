@@ -1,4 +1,4 @@
-(ns zentrope-mq.impl.conn2
+(ns zentrope-mq.impl.amqp
   (:import
     [com.rabbitmq.client ConnectionFactory MessageProperties])
   (:require
