@@ -4,7 +4,7 @@
   ;;
   (:require
     [clojure.tools.logging :as log]
-    [clojure.core.async :refer [chan thread <! close!]]
+    [clojure.core.async :refer [chan thread <! close! filter<]]
     [zentrope-mq.impl.amqp :as amqp])
   ;;
   (:import
@@ -35,42 +35,22 @@
       (.basicConsume queue auto-ack consumer))
     consumer))
 
-;;-----------------------------------------------------------------------------
-;;
-;; The old one worked by starting up a thread which blocked waiting
-;; for an incoming message and then delegated to a callback.
-;;
-;; If something went wrong, the thread would die after removing an ID
-;; from the "live" list and adding it to the "dead" list. If the
-;; thread was interrupted due to a legit reason, it did not add itself
-;; to the dead list.
-;;
-;; I supervisor would restart things in the dead list.
-;;
-;;-----------------------------------------------------------------------------
-;;
-;; So, rewrite? How about the "dead" list is just a queue. When a
-;; consumer process dies, it sends a message to the
-;; reincarnation-queue and then lets go.
-;;
-;; The consumer queue itself can be a thread, I guess, unless we want
-;; to use a channel rather than a callback for message delegation.
-;;
-;;-----------------------------------------------------------------------------
-;;
-;; Unsubscribe: Set up a go loop per channel. When something shows up in
-;; the channel, kill the consumer. This will cause the consumer-thread to
-;; die. How do we keep the consumer from reincarnation? Hm. Might be what the
-;; .isInitiatedByApplication means for the ShutdownSignal thing.
-;;
-;; Also, might be worth porting this to http://clojurerabbitmq.info
-;;
-;;-----------------------------------------------------------------------------
+(defn- unsubscribe-loop!
+  [bardo pid channel]
+  (let [c (filter< #(and (= (first %) :die)
+                         (= (second %) pid)) bardo)]
+    (go
+      (when-let [msg (<! c)]
+        (when (.isOpen channel)
+          (.close channel)))
+      (log/info "unsubscribed" pid))))
 
 (defn- consumer-thread
   "Delegates incoming messages from consumer to delegate. On exception,
    dies, but sends exit message to bardo for possible re-incarnation."
   [bardo pid exchange queue route consumer delegate]
+  (put! bardo [:die pid]) ;; just in case
+  (unsubscribe-loop! bardo pid (.getChannel consumer))
   (thread
     (try
       (loop []
@@ -80,7 +60,7 @@
                  (log/error "Uncaught delegate exception:" t))))
         (recur))
       (catch Throwable t
-        (put! bardo [:exit pid t exchange queue route delegate])))))
+        (put! bardo [:exit [pid t exchange queue route delegate]])))))
 
 (defn- reincarnate?
   [exception]
@@ -95,8 +75,8 @@
         (when (instance? AlreadyClosedException exception)
           (amqp/restart! conn))
         (let [c (make-consumer! conn exchange queue route)]
-          (consumer-thread bardo pid exchange queue route c delegate))
-        (recur)))))
+          (consumer-thread bardo pid exchange queue route c delegate)))
+      (recur))))
 
 ;;-----------------------------------------------------------------------------
 
@@ -106,12 +86,16 @@
 
 (defn subscribe!
   [this pid exchange route queue delegate]
-  (let [{:keys [conn bardo]} @this
-        c (make-consumer! conn pid exchange queue route)]
-    (consumer-thread bardo conn pid exchange queue route c delegate)))
+  (let [{:keys [conn bardo reaper]} @this
+        consumer (make-consumer! conn pid exchange queue route)]
+    (consumer-thread bardo conn pid exchange queue route consumer delegate)
+    [:subscribed pid]))
 
 (defn unsubscribe!
-  [this])
+  [this pid]
+  (let [{:keys [conn bardo]} @this]
+    (put! bardo [:die pid])
+    [:unsubscribed pid]))
 
 (defn start!
   [this]
